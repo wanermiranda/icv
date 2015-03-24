@@ -2,44 +2,40 @@
 import numpy as np
 import matplotlib.pyplot as plt 
 import cv2
-import os
+import sys
 import glob 
 
-MIN_MATCHES = 4
+MIN_MATCHES = 4	
+slide_window = 80 # H x H square window 
+stride = 10 # step to slide 
+NORM = 1
 
-def show_image(img):
-    plt.imshow(img)
-    if len(img.shape)<3:
-        plt.gray()
-    plt.axis("off")
-    plt.show()
+def image_hist(img):
+    colors_hist = np.ndarray(shape=(3,256), dtype=np.double) 
+    for row in img:
+        for column in row:
+            for i in range(3):
+                color = column[i]
+                colors_hist[i][color] = colors_hist[i][color] +1
+    colors_hist *= NORM/colors_hist.max()
+    return colors_hist
+    '''for i in range(3):
+        plt.plot(colors_hist[i])
+        plt.xlim([0,256])
+    plt.show()'''
 
+def dist_bin(A, B): 
+    diff = np.ndarray(shape=(3,256), dtype=np.double)
+    diff[0] = np.fabs(A[0] - B[0])
+    diff[0]*= NORM/diff[0].max()
 
-def filter_matches(kp1, kp2, matches, ratio = 0.75):
-    """
-    Keep only matches that have distance ratio to 
-    second closest point less than 'ratio'.
-    """
-    mkp1, mkp2 = [], []
-    for m in matches:
-        if m[0].distance < m[1].distance * ratio:
-            m = m[0]
-            mkp1.append( kp1[m.queryIdx] )
-            mkp2.append( kp2[m.trainIdx] )
-    p1 = np.float32([kp.pt for kp in mkp1])
-    p2 = np.float32([kp.pt for kp in mkp2])
-    kp_pairs = zip(mkp1, mkp2)    
-    return p1, p2, kp_pairs
+    diff[1] = np.fabs(A[1] - B[1])
+    diff[1]*= NORM/diff[1].max()
 
-def match_images(detector, matcher, target, kp1, desc1):
-	kp2, desc2 = detector.detectAndCompute(target, None)
-	raw_matches = matcher.knnMatch(desc1,desc2, k=2)	
-	#raw_matches = matcher.knnMatch(desc1, trainDescriptors = desc2, k = 5)	
-	p1, p2, kp_pairs = filter_matches(kp1, kp2, raw_matches)		
-	print p2.size
-	return (p2.size >= MIN_MATCHES)
-
-
+    diff[2] = np.fabs(A[2] - B[2])
+    diff[2]*= NORM/diff[2].max()
+    
+    return diff.sum()
 
 
 dataset_query = '/home/gorigan/datasets/icv/tp1/imagens/query/'
@@ -56,22 +52,47 @@ queryList = ["001_apple_obj.png"
 			,"008_starbucks_obj.png"
 			,"009_coca_obj.png"]
 
-query_image = queryList[0]
-query_image_path =  dataset_query + query_image
-print query_image_path
-query_image = cv2.imread(query_image_path,3)
-show_image(query_image)
+query = cv2.imread(dataset_query + queryList[0])
+query_hist = image_hist(query)
+height, width = query.shape[:2]
+print height 
+print width
 
 
-detector = cv2.xfeatures2d.SIFT_create()
-norm = cv2.NORM_L2
-matcher = cv2.BFMatcher(norm)
-kp1, desc1 = detector.detectAndCompute(query_image, None)
+for target_image_path in glob.glob(dataset_target_sem_ruido + '001*.png'): 
+    print target_image_path
+    img = cv2.imread(target_image_path)
+    img_height, img_width = img.shape[:2]    
+    res = cv2.resize(img,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
+    #cv2.imshow('Display Window',res)         ## Show image in the window
 
-for target_image_path in glob.glob(dataset_target_com_ruido + '*.png'): 
-	print target_image_path
-	target = cv2.imread(target_image_path,3)
-	if match_images(detector, matcher, target, kp1, desc1): 
-		print 'Matched'
+    y = slide_window
+    x = slide_window
+    while( y < img_height):
+        while( x < img_width):            
+            print y-slide_window, y, x-slide_window, x
+            crop = img[y-slide_window: y, x-slide_window: x]
+            crop_hist = image_hist(crop)
+            diff = str(dist_bin(crop_hist, query_hist))
+            #cv2.imshow('Display Window',crop)
+            print "Crop " + diff
+            cv2.waitKey(0)                           ## Wait for keystroke
+            cv2.destroyAllWindows()
+            x = x + stride
+            if ( x > img_width):                
+                x = img_width   
+                        
+        y = y + stride
+        if ( y > img_height):
+            y = img_height
 
 
+    
+    cv2.waitKey(0)                           ## Wait for keystroke
+    cv2.destroyAllWindows()   
+
+    '''image_hist(img)
+    #image_hist_cv2(img)
+    #print img
+    cv2.waitKey(0)                           ## Wait for keystroke
+    cv2.destroyAllWindows()   '''
