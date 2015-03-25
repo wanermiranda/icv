@@ -54,6 +54,7 @@ queryList = ["001_apple_obj.png"
 
 query = cv2.imread(dataset_query + queryList[0])
 query_hist = image_hist(query)
+print query_hist
 height, width = query.shape[:2]
 print height 
 print width
@@ -63,6 +64,7 @@ for target_image_path in glob.glob(dataset_target_sem_ruido + '001*.png'):
     print target_image_path
     img = cv2.imread(target_image_path)
     img_height, img_width = img.shape[:2]    
+    print "h: " + str(img_height) + " w:" + str(img_width)
     res = cv2.resize(img,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
     #cv2.imshow('Display Window',res)         ## Show image in the window
 
@@ -73,12 +75,14 @@ for target_image_path in glob.glob(dataset_target_sem_ruido + '001*.png'):
             print y-slide_window, y, x-slide_window, x
             crop = img[y-slide_window: y, x-slide_window: x]
             crop_hist = image_hist(crop)
-            diff = str(dist_bin(crop_hist, query_hist))
+            diff = dist_bin(crop_hist, query_hist)
             #cv2.imshow('Display Window',crop)
-            print "Crop " + diff
-            cv2.waitKey(0)                           ## Wait for keystroke
-            cv2.destroyAllWindows()
-            x = x + stride
+            print "Crop " + str(diff)
+            if (diff <= 25):
+		print "Uai!"
+	        plt.imshow(crop)
+		plt.show()
+	    x = x + stride
             if ( x > img_width):                
                 x = img_width   
                         
