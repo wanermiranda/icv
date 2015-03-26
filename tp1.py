@@ -8,29 +8,40 @@ from timer import Timer
 import threading
 import time
 
-MIN_MATCHES = 4	
-slide_window_width = 60 # the height is to be calculed based on the proportion of the query image
-stride = 5 # step to slide 
+slide_window_width = 140 # the height is to be calculed based on the proportion of the query image
+stride = 10 # step to slide 
 NORM = 1
 last_crop = 0
-threadLock = threading.Lock()
 maxThreads = 4
-queryIndex = 1
+queryIndex = 4
 
 class WindowSlider (threading.Thread):
-    def __init__(self, threadID, name, counter, query_hist, crop):
+    def __init__(self, threadID, name, counter, query_hist, column):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
-        self.counter = counter
-        self.crop = crop
+        self.counter = counter        
         self.query_hist = query_hist
+        self.column = column
+        self.best = 9999
 
-    def run(self):        
-        # Get lock to synchronize threads
-        self.crop_hist = image_hist(self.crop)                                    
-        self.diff = dist_bin(self.crop_hist, self.query_hist)                                    
-        
+    def run(self):  
+        y = self.column      
+        slide_window_height = slide_window_width
+        x = slide_window_width
+        while( x < img_width):                        
+            calcY = y-slide_window_height
+            calcX = x-slide_window_width
+            crop = img[calcY: y, calcX: x]  
+            crop_hist = image_hist(crop)                                    
+            diff = dist_bin(crop_hist, self.query_hist)                                    
+            if self.best >= diff:
+                self.best = diff
+                self.crop = crop
+            x = x + stride
+            if (x > img_width):                
+                x = img_width 
+
 
 
 def image_hist(img):
@@ -88,41 +99,31 @@ for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryInde
     res = cv2.resize(img,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
     #cv2.imshow('Display Window',res)         ## Show image in the window
 
-    y = slide_window_height
-    x = slide_window_width
+    y = slide_window_height    
     local_diff = 9999 
     local_corp = None
-    diff = 0
     crop_hist = 0
     while( y < img_height):
-        while( x < img_width):                        
-            
-            threads = []            
-            for t_index in range(maxThreads): 
-                calcY = y-slide_window_height
-                calcX = x-slide_window_width
-                crop = img[calcY: y, calcX: x]                                        
-                l_thread =  WindowSlider(t_index, "Thread-" + str(t_index), t_index, query_hist, crop)
-                l_thread.start()            
-                threads.append(l_thread)
-                x = x + stride
-                if (x > img_width):                
-                    x = img_width 
-            # Wait for all threads to complete
-            for t in threads:
-                t.join()                    
+        threads = []            
+        for t_index in range(maxThreads): 
+            l_thread =  WindowSlider(t_index, "Thread-" + str(t_index), t_index, query_hist, y)
+            l_thread.start()            
+            threads.append(l_thread)
+            y = y + stride
+            x = slide_window_width
+            print y, x
+            if (y > img_height):
+                y = img_height
 
-            for t in threads:
-                if (t.diff <= local_diff):                                        
-                    local_diff = t.diff
-                    local_corp = t.crop
-                    print "Thread: "  + str(t.counter) + " Value: "+ str(local_diff)
-            
-        y = y + stride
-        x = slide_window_width
-        print y, x
-        if (y > img_height):
-            y = img_height
+        
+        for t in threads:
+            t.join()  
+
+        for t in threads:
+            if (t.best <= local_diff):                                        
+                local_diff = t.best
+                local_corp = t.crop
+                print "Thread: "  + str(t.counter) + " Value: "+ str(local_diff)
 
 
     plt.imshow(local_corp)
