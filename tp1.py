@@ -5,11 +5,33 @@ import cv2
 import sys
 import glob 
 from timer import Timer
+import threading
+import time
 
 MIN_MATCHES = 4	
 slide_window_width = 60 # the height is to be calculed based on the proportion of the query image
 stride = 5 # step to slide 
 NORM = 1
+last_crop = 0
+threadLock = threading.Lock()
+maxThreads = 4
+queryIndex = 1
+
+class WindowSlider (threading.Thread):
+    def __init__(self, threadID, name, counter, query_hist, crop):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.name = name
+        self.counter = counter
+        self.crop = crop
+        self.query_hist = query_hist
+
+    def run(self):        
+        # Get lock to synchronize threads
+        self.crop_hist = image_hist(self.crop)                                    
+        self.diff = dist_bin(self.crop_hist, self.query_hist)                                    
+        
+
 
 def image_hist(img):
     colors_hist = np.zeros((3,256)) 
@@ -22,10 +44,7 @@ def image_hist(img):
     colors_hist[1] *= NORM/colors_hist[1].max()
     colors_hist[2] *= NORM/colors_hist[2].max()
     return colors_hist
-    '''for i in range(3):
-        plt.plot(colors_hist[i])
-        plt.xlim([0,256])
-    plt.show()'''
+
 
 def dist_bin(A, B): 
     diff = np.zeros((3,256))
@@ -52,7 +71,6 @@ queryList = ["001_apple_obj.png"
 			,"008_starbucks_obj.png"
 			,"009_coca_obj.png"]
 
-queryIndex = 1
 query = cv2.imread(dataset_query + queryList[queryIndex-1])
 query_hist = image_hist(query)
 print query_hist
@@ -72,41 +90,42 @@ for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryInde
 
     y = slide_window_height
     x = slide_window_width
-    last_diff = 30 
-    last_crop = None
+    local_diff = 9999 
+    local_corp = None
     diff = 0
     crop_hist = 0
     while( y < img_height):
         while( x < img_width):                        
-            calcY = y-slide_window_height
-            calcX = x-slide_window_width
-            '''if ((calcY % slide_window_height) == 0):
-                print calcY, y, calcX, x'''
-            crop = img[calcY: y, calcX: x]
-            #print "hist"
-            #with Timer() as t:
-            crop_hist = image_hist(crop)
-            #print "=> elasped crop_hist: %s s" % t.secs                
-            #print "diff"            
-            #with Timer() as t:
-            diff = dist_bin(crop_hist, query_hist)            
-            #print "=> elasped dist_bin: %s s" % t.secs
-            if (diff <= last_diff):                
-                print "Crop " + str(diff)                
-                print calcY, y, calcX, x
-                last_diff = diff
-                last_crop = crop
-                print "Uai!"	          
-            x = x + stride
-            if (x > img_width):                
-                x = img_width 
+            
+            threads = []            
+            for t_index in range(maxThreads): 
+                calcY = y-slide_window_height
+                calcX = x-slide_window_width
+                crop = img[calcY: y, calcX: x]                                        
+                l_thread =  WindowSlider(t_index, "Thread-" + str(t_index), t_index, query_hist, crop)
+                l_thread.start()            
+                threads.append(l_thread)
+                x = x + stride
+                if (x > img_width):                
+                    x = img_width 
+            # Wait for all threads to complete
+            for t in threads:
+                t.join()                    
+
+            for t in threads:
+                if (t.diff <= local_diff):                                        
+                    local_diff = t.diff
+                    local_corp = t.crop
+                    print "Thread: "  + str(t.counter) + " Value: "+ str(local_diff)
+            
         y = y + stride
         x = slide_window_width
+        print y, x
         if (y > img_height):
             y = img_height
 
 
-    plt.imshow(last_crop)
+    plt.imshow(local_corp)
     plt.show()        
 
     '''image_hist(img)
