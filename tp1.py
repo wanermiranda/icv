@@ -41,8 +41,32 @@ class WindowSlider (threading.Thread):
             x = x + stride
             if (x > img_width):                
                 x = img_width 
+
+def getSquareCenterCrop(img):
+    (h, w) = img.shape[:2]
+    
+    centerH = int(h/2)
+    centerW = int(w/2)
+
+    blockSize = h if (h > w) else w
+    crop = img[ centerH - blockSize: centerH + blockSize, 
+                centerW - blockSize: centerW + blockSize] 
+    return crop
+
+def getMeanSquareDiff(img, target):
+    (m, n) = img.shape[:2]    
+    summ = 0.0
+    for j in range(m):
+        for i in range(n):
+            if target[j,i] != 0:
+                summ += np.subtract(img[j][i], target[j][i], dtype=np.float64) ** 2
+
+    return summ/(m*n)
+
+
+
 def rotateImg (img, angle):
-    (h, w) = image.shape[:2]
+    (h, w) = img.shape[:2]
     center = (w / 2, h / 2)
      
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
@@ -91,21 +115,22 @@ queryList = ["001_apple_obj.png"
 			,"009_coca_obj.png"]
 
 query_color = cv2.imread(dataset_query + queryList[queryIndex-1])
-query_hist = image_hist(query_color)
-print query_hist
 height, width = query_color.shape[:2]
 print height 
 print width
 slide_window_height = slide_window_width #/ (float(width) / height)
 
 print "Pre-processing image"
-query_mono = cv2.cvtColor(query_color, cv2.COLOR_GRAY2BGR)
-angledImages = np.zeros(height, width, np.float32)
+query_mono = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
+query_mono = getSquareCenterCrop(query_mono)
+angledImages = []
 
 for angle in range(359):
-    angledImages[angle] = rotateImg(query_mono, angle)
-    if (angle % 30):
-        plt.imshow(local_corp)
+    angledImages.append(rotateImg(query_mono, angle))
+    if ((angle % 30) == 0):
+        print angle
+        print getMeanSquareDiff(query_mono, angledImages[angle])
+        plt.imshow(angledImages[angle], cmap = plt.get_cmap('gray'))
         plt.show()  
 
 print "End pre-processing image"
