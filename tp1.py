@@ -8,7 +8,7 @@ from timer import Timer
 import threading
 import time
 
-slide_window_width = 140 # the height is to be calculed based on the proportion of the query image
+slide_window_width = 0 # to be initilized further
 stride = 10 # step to slide 
 NORM = 1
 last_crop = 0
@@ -41,6 +41,10 @@ class WindowSlider (threading.Thread):
             x = x + stride
             if (x > img_width):                
                 x = img_width 
+
+def find_nearest(array,value):
+    idx = np.abs(np.subtract.outer(array, value)).argmin(0)
+    return (array[idx], idx)
 
 def getSquareCenterCrop(img):
     (h, w) = img.shape[:2]
@@ -125,15 +129,25 @@ query_mono = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
 query_mono = getSquareCenterCrop(query_mono)
 angledImages = []
 
-for angle in range(359):
-    angledImages.append(rotateImg(query_mono, angle))
-    if ((angle % 30) == 0):
-        print angle
-        print getMeanSquareDiff(query_mono, angledImages[angle])
+for angle in range(72):
+    img  = rotateImg(query_mono, angle*5)
+    diff = getMeanSquareDiff(query_mono, img)
+    angledImages.append(diff);
+    print "Angle " + str(angle*5)
+    print diff
+    '''if (((angle*5) % 30) == 0):
+        print diff
         plt.imshow(angledImages[angle], cmap = plt.get_cmap('gray'))
-        plt.show()  
+        plt.show()  '''
 
 print "End pre-processing image"
+
+print "Nearest 666.00"
+print 
+(value, angle) = find_nearest(angledImages, 666.0)
+print str(value) + " at " + str(angle*5) + "o"
+
+
 '''
 for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
     print target_image_path
