@@ -119,6 +119,7 @@ queryList = ["001_apple_obj.png"
 			,"009_coca_obj.png"]
 
 query_color = cv2.imread(dataset_query + queryList[queryIndex-1])
+query_color = cv2.resize(query_color,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
 height, width = query_color.shape[:2]
 print height 
 print width
@@ -127,6 +128,7 @@ slide_window_height = slide_window_width #/ (float(width) / height)
 print "Pre-processing image"
 query_mono = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
 query_mono = getSquareCenterCrop(query_mono)
+query_mono = cv2.resize(query_mono,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
 angledImages = []
 
 for angle in range(72):
@@ -135,6 +137,7 @@ for angle in range(72):
     angledImages.append(diff);
     print "Angle " + str(angle*5)
     print diff
+    sys.stdout.flush()
     '''if (((angle*5) % 30) == 0):
         print diff
         plt.imshow(angledImages[angle], cmap = plt.get_cmap('gray'))
