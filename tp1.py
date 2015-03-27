@@ -13,7 +13,7 @@ stride = 10 # step to slide
 NORM = 1
 last_crop = 0
 maxThreads = 4
-queryIndex = 4
+queryIndex = 3
 
 class WindowSlider (threading.Thread):
     def __init__(self, threadID, name, counter, query_hist, column):
@@ -41,7 +41,15 @@ class WindowSlider (threading.Thread):
             x = x + stride
             if (x > img_width):                
                 x = img_width 
+def rotateImg (img, angle):
+    (h, w) = image.shape[:2]
+    center = (w / 2, h / 2)
+     
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(img, M, (w, h))
+    return rotated
 
+#def quad_diff(img, target):
 
 
 def image_hist(img):
@@ -82,15 +90,26 @@ queryList = ["001_apple_obj.png"
 			,"008_starbucks_obj.png"
 			,"009_coca_obj.png"]
 
-query = cv2.imread(dataset_query + queryList[queryIndex-1])
-query_hist = image_hist(query)
+query_color = cv2.imread(dataset_query + queryList[queryIndex-1])
+query_hist = image_hist(query_color)
 print query_hist
-height, width = query.shape[:2]
+height, width = query_color.shape[:2]
 print height 
 print width
 slide_window_height = slide_window_width #/ (float(width) / height)
 
+print "Pre-processing image"
+query_mono = cv2.cvtColor(query_color, cv2.COLOR_GRAY2BGR)
+angledImages = np.zeros(height, width, np.float32)
 
+for angle in range(359):
+    angledImages[angle] = rotateImg(query_mono, angle)
+    if (angle % 30):
+        plt.imshow(local_corp)
+        plt.show()  
+
+print "End pre-processing image"
+'''
 for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
     print target_image_path
     img = cv2.imread(target_image_path)
@@ -129,7 +148,7 @@ for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryInde
     plt.imshow(local_corp)
     plt.show()        
 
-    '''image_hist(img)
+    image_hist(img)
     #image_hist_cv2(img)
     #print img
     cv2.waitKey(0)                           ## Wait for keystroke
