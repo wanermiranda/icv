@@ -87,9 +87,13 @@ def image_hist(img):
             for i in range(3):
                 color = column[i]
                 colors_hist[i][color] = colors_hist[i][color] +1
-    colors_hist[0] *= NORM/colors_hist[0].max()
-    colors_hist[1] *= NORM/colors_hist[1].max()
-    colors_hist[2] *= NORM/colors_hist[2].max()
+    maxB = colors_hist[0].max()
+    maxG = colors_hist[1].max()
+    maxR = colors_hist[2].max()
+    for idx in range(256):    
+        colors_hist[0][idx] *= NORM/maxB
+        colors_hist[1][idx] *= NORM/maxG
+        colors_hist[2][idx] *= NORM/maxR
     return colors_hist
 
 
@@ -119,7 +123,8 @@ queryList = ["001_apple_obj.png"
 			,"009_coca_obj.png"]
 
 query_color = cv2.imread(dataset_query + queryList[queryIndex-1])
-query_color = cv2.resize(query_color,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
+#Resing to 30, 3 times more performance, 
+query_color = cv2.resize(query_color,None,fx=0.3, fy=0.3, interpolation = cv2.INTER_CUBIC)
 height, width = query_color.shape[:2]
 print height 
 print width
@@ -128,14 +133,13 @@ slide_window_height = slide_window_width #/ (float(width) / height)
 print "Pre-processing image"
 query_mono = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
 query_mono = getSquareCenterCrop(query_mono)
-query_mono = cv2.resize(query_mono,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
 angledImages = []
 
-for angle in range(72):
-    img  = rotateImg(query_mono, angle*5)
+for angle in range(360):
+    img  = rotateImg(query_mono, angle)
     diff = getMeanSquareDiff(query_mono, img)
     angledImages.append(diff);
-    print "Angle " + str(angle*5)
+    print "Angle " + str(angle)
     print diff
     sys.stdout.flush()
     '''if (((angle*5) % 30) == 0):
@@ -150,6 +154,46 @@ print
 (value, angle) = find_nearest(angledImages, 666.0)
 print str(value) + " at " + str(angle*5) + "o"
 
+
+for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
+    print target_image_path
+    target = cv2.imread(target_image_path)
+    img_height, img_width = target.shape[:2]
+    y = slide_window_height    
+    local_diff = 9999 
+    local_corp = None
+    crop_hist = 0
+    while( y < img_height):
+        threads = []            
+        for t_index in range(maxThreads): 
+            l_thread =  WindowSlider(t_index, "Thread-" + str(t_index), t_index, query_hist, y)
+            l_thread.start()            
+            threads.append(l_thread)
+            y = y + stride
+            x = slide_window_width
+            print y, x
+            if (y > img_height):
+                y = img_height
+
+        
+        for t in threads:
+            t.join()  
+
+        for t in threads:
+            if (t.best <= local_diff):                                        
+                local_diff = t.best
+                local_corp = t.crop
+                print "Thread: "  + str(t.counter) + " Value: "+ str(local_diff)
+
+
+    plt.imshow(local_corp)
+    plt.show()        
+
+    image_hist(img)
+    #image_hist_cv2(img)
+    #print img
+    cv2.waitKey(0)                           ## Wait for keystroke
+    cv2.destroyAllWindows()       
 
 '''
 for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
