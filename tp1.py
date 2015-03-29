@@ -8,39 +8,49 @@ from timer import Timer
 import threading
 import time
 
+base_scale = 1 # used to reduce the amount of data threated
 slide_window_width = 0 # to be initilized further
 stride = 10 # step to slide 
 NORM = 1
 last_crop = 0
 maxThreads = 4
-queryIndex = 3
+
+queryIndex = 1
 
 class WindowSlider (threading.Thread):
-    def __init__(self, threadID, name, counter, query_hist, column):
+    def __init__(self, threadID, query, target, column):
         threading.Thread.__init__(self)
         self.threadID = threadID
-        self.name = name
-        self.counter = counter        
-        self.query_hist = query_hist
+        self.query = query
+        self.target = target
         self.column = column
-        self.best = 9999
+        self.best = -1
 
     def run(self):  
         y = self.column      
         slide_window_height = slide_window_width
         x = slide_window_width
-        while( x < img_width):                        
+        target_height, target_width  = self.target.shape[:2]
+
+        while( x < target_width):                        
             calcY = y-slide_window_height
             calcX = x-slide_window_width
-            crop = img[calcY: y, calcX: x]  
-            crop_hist = image_hist(crop)                                    
-            diff = dist_bin(crop_hist, self.query_hist)                                    
-            if self.best >= diff:
+            crop = self.target[calcY: y, calcX: x]  
+            
+            MSDiff = getMeanSquareDiff(crop, self.target)
+            (value, angle) = find_nearest(angledImages, MSDiff)
+            diff = (MSDiff - value)**2
+
+            if ((self.best >= diff) or (self.best == -1)):
                 self.best = diff
                 self.crop = crop
+                self.angle = angle
+                print x
+
             x = x + stride
-            if (x > img_width):                
-                x = img_width 
+            
+            if (x > target_width):                
+                x = target_width 
 
 def find_nearest(array,value):
     idx = np.abs(np.subtract.outer(array, value)).argmin(0)
@@ -52,9 +62,10 @@ def getSquareCenterCrop(img):
     centerH = int(h/2)
     centerW = int(w/2)
 
-    blockSize = h if (h > w) else w
-    crop = img[ centerH - blockSize: centerH + blockSize, 
-                centerW - blockSize: centerW + blockSize] 
+    blockSize = h if (h < w) else w
+    print "block size " + str(blockSize)    
+    query_color = cv2.resize(query_color,None,fx=2.0, fy=2.0, interpolation = cv2.INTER_CUBIC)
+    
     return crop
 
 def getMeanSquareDiff(img, target):
@@ -123,119 +134,70 @@ queryList = ["001_apple_obj.png"
 			,"009_coca_obj.png"]
 
 query_color = cv2.imread(dataset_query + queryList[queryIndex-1])
-#Resing to 30, 3 times more performance, 
-query_color = cv2.resize(query_color,None,fx=0.3, fy=0.3, interpolation = cv2.INTER_CUBIC)
+query_color = cv2.resize(query_color,None,fx=base_scale, fy=base_scale, interpolation = cv2.INTER_CUBIC)
 height, width = query_color.shape[:2]
-print height 
-print width
-slide_window_height = slide_window_width #/ (float(width) / height)
+print "Query Image -> h: " + str(height) + " w:" + str(width)
 
 print "Pre-processing image"
 query_mono = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
 query_mono = getSquareCenterCrop(query_mono)
-angledImages = []
+height, width = query_mono.shape[:2]
+print "Query Center Image -> h: " + str(height) + " w:" + str(width)
 
-for angle in range(360):
+#plt.imshow(query_mono, cmap = plt.get_cmap('gray'))
+#plt.show()        
+
+angledImages = []
+for idx in range(41):
+    angle= idx
     img  = rotateImg(query_mono, angle)
     diff = getMeanSquareDiff(query_mono, img)
-    angledImages.append(diff);
-    print "Angle " + str(angle)
-    print diff
-    sys.stdout.flush()
-    '''if (((angle*5) % 30) == 0):
+    angledImages.append(diff);    
+    if (((angle) % 10) == 0):
+        print "Angle " + str(angle)
         print diff
-        plt.imshow(angledImages[angle], cmap = plt.get_cmap('gray'))
-        plt.show()  '''
+        sys.stdout.flush()
+
 
 print "End pre-processing image"
 
-print "Nearest 666.00"
 print 
-(value, angle) = find_nearest(angledImages, 666.0)
-print str(value) + " at " + str(angle*5) + "o"
-
+'''(value, angle) = find_nearest(angledImages, 666.0)
+print str(value) + " at " + str(angle) + "o"'''
+slide_window_width   =  width
+slide_window_height  = height
 
 for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
     print target_image_path
-    target = cv2.imread(target_image_path)
-    img_height, img_width = target.shape[:2]
+    target_color = cv2.imread(target_image_path)
+    target_mono = cv2.cvtColor(target_color, cv2.COLOR_BGR2GRAY)    
+    target_mono = cv2.resize(target_mono,None,fx=base_scale, fy=base_scale, interpolation = cv2.INTER_CUBIC)    
+    target_height, target_width = target_mono.shape[:2]
+    print "h: " + str(target_height) + " w:" + str(target_width)
+
     y = slide_window_height    
-    local_diff = 9999 
-    local_corp = None
-    crop_hist = 0
-    while( y < img_height):
+    local_diff = -1 
+    local_crop = None
+    while( y < target_height):
         threads = []            
         for t_index in range(maxThreads): 
-            l_thread =  WindowSlider(t_index, "Thread-" + str(t_index), t_index, query_hist, y)
+            l_thread =  WindowSlider(t_index, query_mono, target_mono, y)
             l_thread.start()            
             threads.append(l_thread)
             y = y + stride
-            x = slide_window_width
-            print y, x
-            if (y > img_height):
-                y = img_height
-
+            print "Line :" + str(y)
+            if (y > target_height):
+                y = target_height
         
         for t in threads:
             t.join()  
 
         for t in threads:
-            if (t.best <= local_diff):                                        
+            if ((t.best <= local_diff) or (local_diff == -1)):                                        
                 local_diff = t.best
-                local_corp = t.crop
-                print "Thread: "  + str(t.counter) + " Value: "+ str(local_diff)
+                local_crop = t.crop
+                print "Thread: "  + str(t.threadID) + " Value: "+ str(local_diff)
 
 
-    plt.imshow(local_corp)
+    plt.imshow(local_crop, cmap = plt.get_cmap('gray'))
     plt.show()        
-
-    image_hist(img)
-    #image_hist_cv2(img)
-    #print img
-    cv2.waitKey(0)                           ## Wait for keystroke
-    cv2.destroyAllWindows()       
-
-'''
-for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
-    print target_image_path
-    img = cv2.imread(target_image_path)
-    img_height, img_width = img.shape[:2]    
-    print "h: " + str(img_height) + " w:" + str(img_width)
-    res = cv2.resize(img,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
-    #cv2.imshow('Display Window',res)         ## Show image in the window
-
-    y = slide_window_height    
-    local_diff = 9999 
-    local_corp = None
-    crop_hist = 0
-    while( y < img_height):
-        threads = []            
-        for t_index in range(maxThreads): 
-            l_thread =  WindowSlider(t_index, "Thread-" + str(t_index), t_index, query_hist, y)
-            l_thread.start()            
-            threads.append(l_thread)
-            y = y + stride
-            x = slide_window_width
-            print y, x
-            if (y > img_height):
-                y = img_height
-
-        
-        for t in threads:
-            t.join()  
-
-        for t in threads:
-            if (t.best <= local_diff):                                        
-                local_diff = t.best
-                local_corp = t.crop
-                print "Thread: "  + str(t.counter) + " Value: "+ str(local_diff)
-
-
-    plt.imshow(local_corp)
-    plt.show()        
-
-    image_hist(img)
-    #image_hist_cv2(img)
-    #print img
-    cv2.waitKey(0)                           ## Wait for keystroke
-    cv2.destroyAllWindows()   '''
