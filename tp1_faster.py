@@ -16,7 +16,7 @@ NORM = 1
 last_crop = 0
 maxThreads = 4
 
-queryIndex = 9
+queryIndex = 1
 
 class WindowSlider (threading.Thread):
     def __init__(self, threadID, query, target, column, best, query_hist):
@@ -179,81 +179,43 @@ for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryInde
     target_color = cv2.imread(target_image_path)    
     target_color = cv2.resize(target_color,None,fx=0.8, fy=0.8, interpolation = cv2.INTER_CUBIC)
     target_height, target_width = target_color.shape[:2]
+    best_diff = -1
+    best_crop = target_color
+    dim_x = [0, target_height/2,       0, target_height/2, target_height/2,   target_height, target_height/2,    target_height]         
+    dim_y = [0,  target_width/2, target_width/2,    target_width,        0,  target_width/2,  target_width/2,     target_width]             
+    for idx in range(4):
+        crop = img[dim_y[idx]: dim_y[idx+1], dim_x[idx]: dim_x[idx+1]] 
+        (local_crop, local_diff) = quad_it(crop, best_diff)
+        if ((crop_diff <= result_diff) or (result_diff == -1)
+            best_diff = local_diff
+            best_crop = local_crop
+            plt.imshow(cv2.cvtColor(result_crop, cv2.COLOR_BGR2RGB))
+            plt.show()
 
-    print target_width
-    print target_height
 
-    y = slide_window_height    
-    local_diff = -1 
-    local_crop = None
-    '''
-    # Test Block - Sandbox
-    
 
-    calcY = 232-(slide_window_height/2)
-    calcX = 256-(slide_window_width/2)
-
-    y =  232 + (slide_window_height/2)
-    x =  256 + (slide_window_width/2)
-
-    local_crop = target_color[calcY: y, calcX: x]  
-
-    MSDiff = getMeanSquareDiff_BGR(local_crop, query_color)
-    #(value, angle) = find_nearest(angledImages, MSDiff)
-    #diff = (MSDiff - value)**2
-
-    print MSDiff
-    plt.imshow(local_crop, cmap = plt.get_cmap('gray'))
-    plt.show()        
-
-    # Test Block - Sandbox
-    '''
-    while( y < target_height):
-        threads = []            
-        for t_index in range(maxThreads): 
-            l_thread =  WindowSlider(t_index, query_color, target_color, y, local_diff, query_hist)
-            l_thread.start()            
-            threads.append(l_thread)
-            y = y + stride
-            print "Line :" + str(y)
-            if (y > target_height):
-                y = target_height
-        
-        for t in threads:
-            t.join()  
-
-        for t in threads:
-            if ( ((t.best <= local_diff) or (local_diff == -1)) and (t.best != -1)):
-                print "Thread: "  + str(t.threadID) + " Value: "+ str(t.best)
-                if (t.crop != None):
-                    local_diff = t.best
-                    local_crop = t.crop
-                    h, w = local_crop.shape[:2]
-                    print h 
-                    print w                    
-                    #if (62 >= local_diff):
-                        #plt.imshow(local_crop, cmap = plt.get_cmap('brg_r'))
-                        #plt.show()
 
 print time.time()
 plt.imshow(cv2.cvtColor(local_crop, cv2.COLOR_BGR2RGB))
 plt.show()        
 
 
-print "Post-processing image"
-'''
-diff_angle = -1
-for idx in range(120):
-    angle= idx
-    img  = rotateImg(query_color, angle)
-    diff = getMeanSquareDiff_BGR(local_crop, img)    
-    if ( (diff <= diff_angle) or (diff_angle == -1)):
-        diff_angle = diff
-        print "Angle " + str(angle)
-        print diff
-        sys.stdout.flush()
-        #plt.imshow(img, cmap = plt.get_cmap('gray'))
-        #plt.show()        
 
-'''
-print "End Post-processing image"
+def quad_it(img, best):
+    (height, width) = img.shape[:2]
+    result_diff = best
+    result_crop = None
+    dim_x = [0, height/2,       0, height/2, height/2,   height, height/2,    height]         
+    dim_y = [0,  width/2, width/2,    width,        0,  width/2,  width/2,     width]         
+    for idx in range(4): 
+
+        crop = img[dim_y[idx]: dim_y[idx+1], dim_x[idx]: dim_x[idx+1]]         
+        print "diff crop 1"
+        crop_diff = image_hist(crop)
+        print dist_bin(crop_diff, query_hist)        
+        if ((crop_diff <= result_diff) or (result_diff == -1)
+            result_diff = crop_diff
+            result_crop = crop
+            plt.imshow(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+            plt.show()
+    return result_diff, result_crop
