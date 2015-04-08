@@ -16,7 +16,7 @@ NORM = 1
 last_crop = 0
 maxThreads = 4
 
-queryIndex = 9
+queryIndex = 7
 
 class WindowSlider (threading.Thread):
     def __init__(self, threadID, query, target, column, best, query_hist):
@@ -39,7 +39,7 @@ class WindowSlider (threading.Thread):
             calcX = x-slide_window_width
             crop = self.target[calcY: y, calcX: x]  
             block_hist = image_hist(crop)
-            MSDiff = dist_bin(block_hist, query_hist)
+            MSDiff = dist_bin(block_hist, self.query_hist, self.best)
             #(value, angle) = find_nearest(angledImages, MSDiff)
             diff = MSDiff #(MSDiff - value)**2
 
@@ -129,15 +129,18 @@ def image_hist(img):
     return colors_hist
 
 
-def dist_bin(A, B): 
+def dist_bin(A, B, best): 
     diff = np.zeros((3,256))
-    for row in range(256):
-        for band in range(3):            
-            diff[band][row] = (A[band][row] - B[band][row])**2
-            diff[band][row] = (A[band][row] - B[band][row])**2
-            diff[band][row] = (A[band][row] - B[band][row])**2
+    summ = 0
+    for row in range(256):        
+            diff[0][row] = (A[0][row] - B[0][row])**2
+            diff[1][row] = (A[1][row] - B[1][row])**2
+            diff[2][row] = (A[2][row] - B[2][row])**2
+            summ = summ  + diff[0][row] + diff[1][row] + diff[2][row]
+            if ((best > -1) and (summ > best)): 
+                break
     
-    return diff.sum()
+    return summ
 
 print time.time()
 dataset_query = '/home/gorigan/datasets/icv/tp1/imagens/query/'
@@ -150,9 +153,11 @@ queryList = ["001_apple_obj.png"
 			,"004_yen_obj.png"
 			,"005_bottle_obj.png"
 			,"006_shoe_obj.png"
-			,"007_kay_obj.png "
+			,"007_kay_obj.png"
 			,"008_starbucks_obj.png"
 			,"009_coca_obj.png"]
+
+starting = time.time()
 
 query_color = cv2.imread(dataset_query + queryList[queryIndex-1])
 query_color = cv2.resize(query_color,None,fx=base_scale, fy=base_scale, interpolation = cv2.INTER_CUBIC)
@@ -164,8 +169,8 @@ print "Query Image -> h: " + str(height) + " w:" + str(width)
 height, width = query_color.shape[:2]
 print "Query Center Image -> h: " + str(height) + " w:" + str(width)
 
-slide_window_width   =  width
-slide_window_height  = height
+slide_window_width   =  width * 0.2
+slide_window_height  = height * 0.2 
 
 print "Slide Window: "
 print 'slide_window_width   ' +str( width)
@@ -177,7 +182,7 @@ query_hist = image_hist(query_color)
 for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
     print target_image_path
     target_color = cv2.imread(target_image_path)    
-    target_color = cv2.resize(target_color,None,fx=0.8, fy=0.8, interpolation = cv2.INTER_CUBIC)
+    target_color = cv2.resize(target_color,None,fx=base_scale, fy=base_scale, interpolation = cv2.INTER_CUBIC)
     target_height, target_width = target_color.shape[:2]
 
     print target_width
@@ -235,9 +240,10 @@ for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryInde
                         #plt.imshow(local_crop, cmap = plt.get_cmap('brg_r'))
                         #plt.show()
 
-print time.time()
+print "TIME: " + str(time.time() - starting) + " SECS"
 plt.imshow(cv2.cvtColor(local_crop, cv2.COLOR_BGR2RGB))
 plt.show()        
+
 
 
 print "Post-processing image"
