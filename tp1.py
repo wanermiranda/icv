@@ -15,8 +15,22 @@ stride = 5 # step to slide
 NORM = 1
 last_crop = 0
 maxThreads = 4
-
 queryIndex = 7
+
+dataset_query = '/home/gorigan/datasets/icv/tp1/imagens/query/'
+dataset_target_sem_ruido = '/home/gorigan/datasets/icv/tp1/imagens/target/sem_ruido/'
+dataset_target_com_ruido = '/home/gorigan/datasets/icv/tp1/imagens/target/com_ruido/'
+
+queryList = ["001_apple_obj.png"
+            ,"002_dumbphone_obj.png"
+            ,"003_japan_obj.png"
+            ,"004_yen_obj.png"
+            ,"005_bottle_obj.png"
+            ,"006_shoe_obj.png"
+            ,"007_kay_obj.png"
+            ,"008_starbucks_obj.png"
+            ,"009_coca_obj.png"]
+
 
 class WindowSlider (threading.Thread):
     def __init__(self, threadID, query, target, column, best, query_hist):
@@ -142,124 +156,112 @@ def dist_bin(A, B, best):
     
     return summ
 
-print time.time()
-dataset_query = '/home/gorigan/datasets/icv/tp1/imagens/query/'
-dataset_target_sem_ruido = '/home/gorigan/datasets/icv/tp1/imagens/target/sem_ruido/'
-dataset_target_com_ruido = '/home/gorigan/datasets/icv/tp1/imagens/target/com_ruido/'
-
-queryList = ["001_apple_obj.png"
-			,"002_dumbphone_obj.png"
-			,"003_japan_obj.png"
-			,"004_yen_obj.png"
-			,"005_bottle_obj.png"
-			,"006_shoe_obj.png"
-			,"007_kay_obj.png"
-			,"008_starbucks_obj.png"
-			,"009_coca_obj.png"]
-
-starting = time.time()
-
-query_color = cv2.imread(dataset_query + queryList[queryIndex-1])
-query_color = cv2.resize(query_color,None,fx=base_scale, fy=base_scale, interpolation = cv2.INTER_CUBIC)
-height, width = query_color.shape[:2]
-print "Query Image -> h: " + str(height) + " w:" + str(width)
-#plt.imshow(cv2.cvtColor(query_color, cv2.COLOR_BGR2RGB))
-#plt.show()   
-
-height, width = query_color.shape[:2]
-print "Query Center Image -> h: " + str(height) + " w:" + str(width)
-
-slide_window_width   =  width * 0.2
-slide_window_height  = height * 0.2 
-
-print "Slide Window: "
-print 'slide_window_width   ' +str( width)
-print 'slide_window_height  ' +str(height)
-
-query_hist = image_hist(query_color)
 
 
-for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
-    print target_image_path
-    target_color = cv2.imread(target_image_path)    
-    target_color = cv2.resize(target_color,None,fx=base_scale, fy=base_scale, interpolation = cv2.INTER_CUBIC)
-    target_height, target_width = target_color.shape[:2]
 
-    print target_width
-    print target_height
+def main (args):
+    starting = time.time()
+    query_color = cv2.imread(dataset_query + queryList[queryIndex-1])
+    query_color = cv2.resize(query_color,None,fx=base_scale, fy=base_scale, interpolation = cv2.INTER_CUBIC)
+    height, width = query_color.shape[:2]
+    print "Query Image -> h: " + str(height) + " w:" + str(width)
+    #plt.imshow(cv2.cvtColor(query_color, cv2.COLOR_BGR2RGB))
+    #plt.show()   
 
-    y = slide_window_height    
-    local_diff = -1 
-    local_crop = None
-    '''
-    # Test Block - Sandbox
-    
+    height, width = query_color.shape[:2]
+    print "Query Center Image -> h: " + str(height) + " w:" + str(width)
 
-    calcY = 232-(slide_window_height/2)
-    calcX = 256-(slide_window_width/2)
+    slide_window_width   =  width * 0.1
+    slide_window_height  = height * 0.1 
 
-    y =  232 + (slide_window_height/2)
-    x =  256 + (slide_window_width/2)
+    print "Slide Window: "
+    print 'slide_window_width   ' +str( width)
+    print 'slide_window_height  ' +str(height)
 
-    local_crop = target_color[calcY: y, calcX: x]  
+    query_hist = image_hist(query_color)
 
-    MSDiff = getMeanSquareDiff_BGR(local_crop, query_color)
-    #(value, angle) = find_nearest(angledImages, MSDiff)
-    #diff = (MSDiff - value)**2
 
-    print MSDiff
-    plt.imshow(local_crop, cmap = plt.get_cmap('gray'))
+    for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
+        print target_image_path
+        target_color = cv2.imread(target_image_path)    
+        target_color = cv2.resize(target_color,None,fx=base_scale, fy=base_scale, interpolation = cv2.INTER_CUBIC)
+        target_height, target_width = target_color.shape[:2]
+
+        print target_width
+        print target_height
+
+        y = slide_window_height    
+        local_diff = -1 
+        local_crop = None
+        '''
+        # Test Block - Sandbox
+        
+
+        calcY = 232-(slide_window_height/2)
+        calcX = 256-(slide_window_width/2)
+
+        y =  232 + (slide_window_height/2)
+        x =  256 + (slide_window_width/2)
+
+        local_crop = target_color[calcY: y, calcX: x]  
+
+        MSDiff = getMeanSquareDiff_BGR(local_crop, query_color)
+        #(value, angle) = find_nearest(angledImages, MSDiff)
+        #diff = (MSDiff - value)**2
+
+        print MSDiff
+        plt.imshow(local_crop, cmap = plt.get_cmap('gray'))
+        plt.show()        
+
+        # Test Block - Sandbox
+        '''
+        while( y < target_height):
+            threads = []            
+            for t_index in range(maxThreads): 
+                l_thread =  WindowSlider(t_index, query_color, target_color, y, local_diff, query_hist)
+                l_thread.start()            
+                threads.append(l_thread)
+                y = y + stride
+                print "Line :" + str(y)
+                if (y > target_height):
+                    y = target_height
+            
+            for t in threads:
+                t.join()  
+
+            for t in threads:
+                if ( ((t.best <= local_diff) or (local_diff == -1)) and (t.best != -1)):
+                    print "Thread: "  + str(t.threadID) + " Value: "+ str(t.best)
+                    if (t.crop != None):
+                        local_diff = t.best
+                        local_crop = t.crop
+                        h, w = local_crop.shape[:2]
+                        print h 
+                        print w                    
+                        #if (62 >= local_diff):
+                            #plt.imshow(local_crop, cmap = plt.get_cmap('brg_r'))
+                            #plt.show()
+
+    print "TIME: " + str(time.time() - starting) + " SECS"
+    plt.imshow(cv2.cvtColor(local_crop, cv2.COLOR_BGR2RGB))
     plt.show()        
 
-    # Test Block - Sandbox
+
+
+    print "Post-processing image"
     '''
-    while( y < target_height):
-        threads = []            
-        for t_index in range(maxThreads): 
-            l_thread =  WindowSlider(t_index, query_color, target_color, y, local_diff, query_hist)
-            l_thread.start()            
-            threads.append(l_thread)
-            y = y + stride
-            print "Line :" + str(y)
-            if (y > target_height):
-                y = target_height
-        
-        for t in threads:
-            t.join()  
+    diff_angle = -1
+    for idx in range(120):
+        angle= idx
+        img  = rotateImg(query_color, angle)
+        diff = getMeanSquareDiff_BGR(local_crop, img)    
+        if ( (diff <= diff_angle) or (diff_angle == -1)):
+            diff_angle = diff
+            print "Angle " + str(angle)
+            print diff
+            sys.stdout.flush()
+            #plt.imshow(img, cmap = plt.get_cmap('gray'))
+            #plt.show()        
 
-        for t in threads:
-            if ( ((t.best <= local_diff) or (local_diff == -1)) and (t.best != -1)):
-                print "Thread: "  + str(t.threadID) + " Value: "+ str(t.best)
-                if (t.crop != None):
-                    local_diff = t.best
-                    local_crop = t.crop
-                    h, w = local_crop.shape[:2]
-                    print h 
-                    print w                    
-                    #if (62 >= local_diff):
-                        #plt.imshow(local_crop, cmap = plt.get_cmap('brg_r'))
-                        #plt.show()
-
-print "TIME: " + str(time.time() - starting) + " SECS"
-plt.imshow(cv2.cvtColor(local_crop, cv2.COLOR_BGR2RGB))
-plt.show()        
-
-
-
-print "Post-processing image"
-'''
-diff_angle = -1
-for idx in range(120):
-    angle= idx
-    img  = rotateImg(query_color, angle)
-    diff = getMeanSquareDiff_BGR(local_crop, img)    
-    if ( (diff <= diff_angle) or (diff_angle == -1)):
-        diff_angle = diff
-        print "Angle " + str(angle)
-        print diff
-        sys.stdout.flush()
-        #plt.imshow(img, cmap = plt.get_cmap('gray'))
-        #plt.show()        
-
-'''
-print "End Post-processing image"
+    '''
+    print "End Post-processing image"
