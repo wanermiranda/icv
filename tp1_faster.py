@@ -192,6 +192,7 @@ print "dist_bin check: " + str(not dist_bin(query_hist, query_hist))
 
 for target_image_path in glob.glob(dataset_target_sem_ruido + '00'+str(queryIndex)+'*.png'): 
     print target_image_path
+    target_color = cv2.cvtColor(target_color, cv2.COLOR_BGR2GRAY)
     target_color = cv2.imread(target_image_path)        
     target_height, target_width = target_color.shape[:2]
 
