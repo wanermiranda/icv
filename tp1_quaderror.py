@@ -156,10 +156,6 @@ class Finder:
         starting = time.time()
         for angle in range(angle_range):
 
-            query_color = cv2.imread(dataset_query + query_list[query_index - 1])
-            query_color = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
-            query_color = rotate_image(query_color, angle * rotation_factor)
-
             print dataset_target_sem_ruido + '00' + str(query_index) + '*.png'
             for target_image_path in glob.glob(dataset_target_sem_ruido + '00' + str(query_index) + '*.png'):
 
@@ -177,18 +173,17 @@ class Finder:
                     query_color = cv2.imread(dataset_query + query_list[query_index - 1])
                     query_bw = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
                     query_color = rotate_image(query_color, angle * rotation_factor)
-
                     query_height, query_width = query_color.shape[:2]
                     query_base_scale = (target_width * factor) / query_width
 
                     query_color = cv2.resize(query_color, None, fx=query_base_scale, fy=query_base_scale)
                     query_bw = cv2.resize(query_bw, None, fx=query_base_scale, fy=query_base_scale)
 
+                    query_height_w, query_width_w = query_bw.shape[:2]
+
                     query_color_hist = image_hist(query_color)
 
-                    query_height, query_width = query_color.shape[:2]
-
-                    slide_window = SlideWindow(query_height, query_width, stride)
+                    slide_window = SlideWindow(query_height_w, query_width_w, stride)
 
                     print "Target Dimensions"
                     print target_height
