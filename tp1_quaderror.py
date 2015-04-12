@@ -137,7 +137,7 @@ class Finder:
         # step to slide
         stride = 5
         max_threads = 4
-        query_index = 5
+        query_index = 2
         rotation_factor = 360
         angle_range = 360 / rotation_factor
 

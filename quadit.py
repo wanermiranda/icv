@@ -3,6 +3,7 @@ __author__ = 'gorigan'
 import glob
 import threading
 import time
+from skimage.measure import structural_similarity as ssim
 
 import matplotlib.pyplot as plt
 
@@ -13,11 +14,8 @@ norm_factor = 100.00
 
 
 class SlideWindow:
-    height = 0.0
-    width = 0.0
-    stride = 2
 
-    def __init__(self, height, width, stride):
+    def __init__(self, height, width, stride=2):
         self.height = height
         self.width = width
         self.stride = stride
@@ -36,7 +34,7 @@ class Difference:
             return 0
 
     def get_value(self):
-        return (self.pixel * 0.7) + (self.histogram * 0.3)
+        return (((1 - self.pixel)/2)*1000) + (self.histogram * 0.01)
 
     def __str__(self):
         return "Difference (value= " + str(self.get_value()) + ", pixel= " + str(self.pixel) + ", histogram=" + str(
@@ -72,9 +70,9 @@ class WindowSlider(threading.Thread):
             hist_diff = get_mse(self.query_hist, hist)
             diff = Difference(hist_diff, 0.0)
 
-            pixel_diff = 0.0
-            if self.full:
-                pixel_diff = get_mse(self.query_bw, crop_bw)
+            pixel_diff = ssim(self.query_bw, crop_bw)
+            # if self.full:
+            #    pixel_diff = get_mse(self.query_bw, crop_bw)
             diff.pixel = pixel_diff
 
             if self.best.greater(diff):
@@ -94,11 +92,11 @@ def show_image(img):
 
 
 def image_hist(img):
-    colors_hist = np.zeros((256, 3))
+    colors_hist = np.zeros((3, 256))
     for i in range(0, 3):
-        colors_hist[:256, i] = cv2.calcHist([img], [i], None, [256], [0, 256])[:256, 0]
-        local_max = colors_hist[:256, i].max()
-        colors_hist[:256, i] *= norm_factor / local_max
+        colors_hist[i, :256] = cv2.calcHist([img], [i], None, [256], [0, 256])[:256, 0]
+        # local_max = colors_hist[:256, i].max()
+        # colors_hist[:256, i] *= norm_factor / local_max
     return colors_hist
 
 
@@ -153,7 +151,7 @@ class Finder:
                 last_local_diff = rotate_diff
                 last_local_crop = rotate_crop
 
-                for factor_index in range(4, 1, -1):
+                for factor_index in range(2, 5):
                     # Readjusting the query size and the slide window to match X% of the targeted image
                     factor = 0.1 * factor_index
 
@@ -172,8 +170,7 @@ class Finder:
                     query_color_hist = image_hist(query_color)
 
                     # step to slide
-                    stride = 5
-                    slide_window = SlideWindow(query_height_w, query_width_w, stride)
+                    slide_window = SlideWindow(query_height_w, query_width_w)
 
                     print "Target Dimensions"
                     print target_height
@@ -197,7 +194,7 @@ class Finder:
                                                     target_bw, y, local_diff)
                             l_thread.start()
                             threads.append(l_thread)
-                            y += stride
+                            y += slide_window.stride
                             print "Line :" + str(y)
                             if y > target_height:
                                 y = target_height
@@ -221,8 +218,8 @@ class Finder:
                         print "DIFF: " + str(local_diff)
                         # showImage(local_crop)
                         # showImage(best_query)
-                    else:
-                        break
+                    # else:
+                       # break
 
                 if rotate_diff.greater(last_local_diff):
                     rotate_crop = last_local_crop
