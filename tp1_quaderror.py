@@ -4,6 +4,7 @@ import threading
 import time
 
 import matplotlib.pyplot as plt
+from sklearn.ensemble._gradient_boosting import np_bool
 
 from rotate import *
 
@@ -42,24 +43,31 @@ class SlideWindow:
     width = 0.0
     stride = 2
 
-    def __init__(self, height, width):
+    def __init__(self, height, width, stride):
         self.height = height
         self.width = width
+        self.stride = stride
 
 
 class Difference:
     def __init__(self, histogram=-1.0, pixel=-1.0):
         self.pixel = pixel
         self.histogram = histogram
+        self.value = (pixel * 0.3) + (histogram * 0.7)
 
     def greater(self, target):
-        if ((self.pixel > target.pixel) and (self.histogram > target.histogram)) or (self.pixel == -1):
+
+        if (self.value > target.get_value()) or (self.pixel == -1):
             return 1
         else:
             return 0
 
+    def get_value(self):
+        return self.value
+
     def __str__(self):
-        return "Difference (pixel= " + str(self.pixel) + ", histogram=" + str(self.histogram) + ")"
+        return "Difference (value= " + str(self.value) + ", pixel= " + str(self.pixel) + ", histogram=" + str(
+            self.histogram) + ")"
 
 
 class WindowSlider(threading.Thread):
@@ -85,10 +93,9 @@ class WindowSlider(threading.Thread):
             calc_x = x - self.slide_window.width
             crop_bw = self.target_bw[calc_y: y, calc_x: x]
             crop_color = self.target_color[calc_y: y, calc_x: x]
-
             hist = image_hist(crop_color)
 
-            pixel_diff = get_square_diff(self.query_bw, crop_bw, self.best)
+            pixel_diff = get_square_diff(self.query_bw, crop_bw)
 
             hist_diff = dist_bin(self.query_hist, hist)
 
@@ -97,7 +104,6 @@ class WindowSlider(threading.Thread):
             if self.best.greater(diff):
                 self.crop = crop_bw
                 self.best = diff
-                print "best diff"
                 print self.best
 
             x += self.slide_window.stride
@@ -117,16 +123,9 @@ def dist_bin(query, target):
     return sums / (256 * 3)
 
 
-def get_square_diff(query, target, best):
+def get_square_diff(query, target):
     (m, n) = query.shape[:2]
-    sums = 0.0
-    for j in range(m):
-        for i in range(n):
-            if target[j, i] != 0:
-                sums += (query[j][i] - target[j][i]) ** 2
-                if sums > (best.pixel * m * n):
-                    break
-
+    sums = np.power(np.array(query)-np.array(target), 2).sum()
     return sums / (m * n)
 
 
@@ -140,7 +139,7 @@ class Finder:
         stride = 5
         max_threads = 4
         query_index = 1
-        rotation_factor = 360
+        rotation_factor = 30
         angle_range = 360 / rotation_factor
 
         dataset_query = '/home/gorigan/datasets/icv/tp1/imagens/query/'
@@ -171,17 +170,16 @@ class Finder:
                 last_local_diff = rotate_diff
                 last_local_crop = rotate_crop
 
-                factor = 0.0
-                for factor_index in range(2, 5):
+                for factor_index in range(1, 5):
                     # Readjusting the query size and the slide window to match X% of the targeted image
-                    print "Factor: " + str(factor)
                     factor = 0.1 * factor_index
+                    print "Factor: " + str(factor)
                     query_color = cv2.imread(dataset_query + query_list[query_index - 1])
                     query_bw = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
                     query_color = rotate_image(query_color, angle * rotation_factor)
 
                     query_height, query_width = query_color.shape[:2]
-                    query_base_scale = (factor * 100) / query_height
+                    query_base_scale = (target_width * factor) / query_width
 
                     query_color = cv2.resize(query_color, None, fx=query_base_scale, fy=query_base_scale)
                     query_bw = cv2.resize(query_bw, None, fx=query_base_scale, fy=query_base_scale)
@@ -190,17 +188,17 @@ class Finder:
 
                     query_height, query_width = query_color.shape[:2]
 
-                    slide_window = SlideWindow(query_height, query_width)
+                    slide_window = SlideWindow(query_height, query_width, stride)
 
                     print "Target Dimensions"
-                    print target_width
                     print target_height
+                    print target_width
                     print "Angle " + str(angle * rotation_factor)
                     # showImage(target_color)
 
                     print "Slide Window Dimensions"
-                    print slide_window.width
                     print slide_window.height
+                    print slide_window.width
                     # showImage(query_color)
 
                     y = slide_window.height
