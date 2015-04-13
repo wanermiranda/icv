@@ -1,21 +1,35 @@
 #!/bin/python
+MAXIMUM_SIZE = 600.00
+norm_factor = 100.00
+max_threads = 4
+query_index = 6
+rotation_factor = 90
+angle_range = 360 / rotation_factor
+
 __author__ = 'gorigan'
 import glob
 import threading
 import time
-from skimage.measure import structural_similarity as ssim
 
 import matplotlib.pyplot as plt
 
 from rotate import *
 
 
-norm_factor = 100.00
+
+
+dataset_query = '/home/gorigan/datasets/icv/tp1/imagens/query/'
+dataset_target_sem_ruido = '/home/gorigan/datasets/icv/tp1/imagens/target/sem_ruido/'
+# dataset_target_com_ruido = '/home/gorigan/datasets/icv/tp1/imagens/target/com_ruido/'
+
+query_list = ['001_apple_obj.png', '002_dumbphone_obj.png', '003_japan_obj.png', '004_yen_obj.png',
+              '005_bottle_obj.png', '006_shoe_obj.png', '007_kay_obj.png', '008_starbucks_obj.png',
+              '009_coca_obj.png']
 
 
 class SlideWindow:
 
-    def __init__(self, height, width, stride=2):
+    def __init__(self, height, width, stride=5):
         self.height = height
         self.width = width
         self.stride = stride
@@ -23,32 +37,30 @@ class SlideWindow:
 
 class Difference:
     def __init__(self, histogram=-1.0, pixel=-1.0):
-        self.pixel = pixel
-        self.histogram = histogram
+        self._pixel = pixel
+        self._histogram = histogram * 1000
 
     def greater(self, target):
 
-        if (self.get_value() > target.get_value()) or (self.pixel == -1):
+        if (self.get_value() > target.get_value()) or (self._pixel == -1):
             return 1
         else:
             return 0
 
     def get_value(self):
-        return (((1 - self.pixel)/2)*1000) + (self.histogram * 0.01)
-
+        return self._pixel + self._histogram*20
     def __str__(self):
-        return "Difference (value= " + str(self.get_value()) + ", pixel= " + str(self.pixel) + ", histogram=" + str(
-            self.histogram) + ")"
+        return "Difference (value= " + str(self.get_value()) + ", pixel= " + str(self._pixel) + ", histogram=" + str(
+            self._histogram) + ")"
 
 
 class WindowSlider(threading.Thread):
-    def __init__(self, slide_window, thread_id, query_bw, query_hist, target_color, target_bw, column, best, full=True):
+    def __init__(self, slide_window, thread_id, query_color, target_color, column, best, full=True):
         threading.Thread.__init__(self)
         self.threadID = thread_id
-        self.query_bw = query_bw
-        self.query_hist = query_hist
+        self.query_color = query_color
+        self.query_hist = image_hist(query_color)
         self.target_color = target_color
-        self.target_bw = target_bw
         self.column = column
         self.best = best
         self.crop = None
@@ -58,36 +70,31 @@ class WindowSlider(threading.Thread):
     def run(self):
         y = self.column
         x = self.slide_window.width
-        target_height_bw, target_width_bw = self.target_bw.shape[:2]
+        target_height, target_width = self.target_color.shape[:2]
 
-        while x < target_width_bw:
+        while x < target_width:
             calc_y = y - self.slide_window.height
             calc_x = x - self.slide_window.width
-            crop_bw = self.target_bw[calc_y: y, calc_x: x]
             crop_color = self.target_color[calc_y: y, calc_x: x]
-            hist = image_hist(crop_color)
 
-            hist_diff = get_mse(self.query_hist, hist)
-            diff = Difference(hist_diff, 0.0)
+            hist_diff = get_mse(image_hist(crop_color), self.query_hist)
+            pixel_diff = get_mse(self.query_color, crop_color)
 
-            pixel_diff = ssim(self.query_bw, crop_bw)
-            # if self.full:
-            #    pixel_diff = get_mse(self.query_bw, crop_bw)
-            diff.pixel = pixel_diff
+            diff = Difference(hist_diff, pixel_diff)
 
             if self.best.greater(diff):
-                self.crop = crop_bw
+                self.crop = crop_color
                 self.best = diff
                 print self.best
 
             x += self.slide_window.stride
 
-            if x > target_width_bw:
-                x = target_width_bw
+            if x > target_width:
+                x = target_width
 
 
 def show_image(img):
-    plt.imshow(img, cmap=plt.cm.Greys_r)
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     plt.show()
 
 
@@ -95,25 +102,40 @@ def image_hist(img):
     colors_hist = np.zeros((3, 256))
     for i in range(0, 3):
         colors_hist[i, :256] = cv2.calcHist([img], [i], None, [256], [0, 256])[:256, 0]
-        # local_max = colors_hist[:256, i].max()
-        # colors_hist[:256, i] *= norm_factor / local_max
+        max_bin = colors_hist[i, :256].max()
+        colors_hist[i, :256] /= max_bin
     return colors_hist
 
 
 def get_mse(query, target):
     (m, n) = query.shape[:2]
+    if (m == 3) and (n == 256):
+        query = query[0:3, 0:256]
+        target = target[0:3, 0:256]
+    # (m, n) = query.shape[:2]
+    # print str(m) + ", " + str(n)
     sums = np.power(np.array(query)-np.array(target), 2).sum()
     return sums / (m * n)
 
 
-def get_bigger_size(query, target, fraction):
+def get_size_factor(query, target, factor):
     (target_h, target_w) = target.shape[:2]
     (query_h, query_w) = query.shape[:2]
     if query_h > query_w:
-        factor = (fraction * target_h) / query_h
+        factor = (factor * target_h) / query_h
     else:
-        factor = (fraction * target_w) / query_w
+        factor = (factor * target_w) / query_w
     return factor
+
+
+def get_base_scale(img, maximum):
+    (query_h, query_w) = img.shape[:2]
+    if query_h > query_w:
+        factor = maximum / query_h
+    else:
+        factor = maximum / query_w
+    return factor
+
 
 
 class Finder:
@@ -121,53 +143,39 @@ class Finder:
 
     def __init__(self):
         # used to reduce the amount of data treated
-        base_scale = 1
-        max_threads = 4
-        query_index = 2
-        rotation_factor = 360
-        angle_range = 360 / rotation_factor
 
-        dataset_query = '/home/gorigan/datasets/icv/tp1/imagens/query/'
-        dataset_target_sem_ruido = '/home/gorigan/datasets/icv/tp1/imagens/target/sem_ruido/'
-        # dataset_target_com_ruido = '/home/gorigan/datasets/icv/tp1/imagens/target/com_ruido/'
-
-        query_list = ['001_apple_obj.png', '002_dumbphone_obj.png', '003_japan_obj.png', '004_yen_obj.png',
-                      '005_bottle_obj.png', '006_shoe_obj.png', '007_kay_obj.png', '008_starbucks_obj.png',
-                      '009_coca_obj.png']
         rotate_diff = Difference()
         rotate_crop = None
         best_query = None
         best_angle = 0
         starting = time.time()
-        for angle in range(angle_range):
+
+        for angle in range(1,2):
 
             print dataset_target_sem_ruido + '00' + str(query_index) + '*.png'
             for target_image_path in glob.glob(dataset_target_sem_ruido + '00' + str(query_index) + '*.png'):
 
                 target_color = cv2.imread(target_image_path)
+                base_scale = get_base_scale(target_color, MAXIMUM_SIZE)
                 target_color = cv2.resize(target_color, None, fx=base_scale, fy=base_scale)
                 target_height, target_width = target_color.shape[:2]
-                target_bw = cv2.cvtColor(target_color, cv2.COLOR_BGR2GRAY)
+                # target_bw = cv2.cvtColor(target_color, cv2.COLOR_BGR2GRAY)
                 last_local_diff = rotate_diff
                 last_local_crop = rotate_crop
 
-                for factor_index in range(2, 5):
+                for factor_index in range(6, 1, -1):
                     # Readjusting the query size and the slide window to match X% of the targeted image
                     factor = 0.1 * factor_index
 
                     print "Factor: " + str(factor)
                     query_color = cv2.imread(dataset_query + query_list[query_index - 1])
-                    query_bw = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
                     query_color = rotate_image(query_color, angle * rotation_factor)
 
-                    query_base_scale = get_bigger_size(query_bw, target_bw, factor)
+                    query_base_scale = get_size_factor(query_color, target_color, factor)
 
                     query_color = cv2.resize(query_color, None, fx=query_base_scale, fy=query_base_scale)
-                    query_bw = cv2.resize(query_bw, None, fx=query_base_scale, fy=query_base_scale)
 
-                    query_height_w, query_width_w = query_bw.shape[:2]
-
-                    query_color_hist = image_hist(query_color)
+                    query_height_w, query_width_w = query_color.shape[:2]
 
                     # step to slide
                     slide_window = SlideWindow(query_height_w, query_width_w)
@@ -190,8 +198,8 @@ class Finder:
                     while y < target_height:
                         threads = []
                         for t_index in range(max_threads):
-                            l_thread = WindowSlider(slide_window, t_index, query_bw, query_color_hist, target_color,
-                                                    target_bw, y, local_diff)
+                            l_thread = WindowSlider(slide_window, t_index, query_color, target_color,
+                                                    y, local_diff)
                             l_thread.start()
                             threads.append(l_thread)
                             y += slide_window.stride
@@ -219,7 +227,7 @@ class Finder:
                         # showImage(local_crop)
                         # showImage(best_query)
                     # else:
-                       # break
+                        # break
 
                 if rotate_diff.greater(last_local_diff):
                     rotate_crop = last_local_crop
