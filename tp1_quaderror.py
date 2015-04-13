@@ -128,6 +128,11 @@ def get_square_diff(query, target):
     return sums / (m * n)
 
 
+def remove_noise(img): 
+    kernel = np.ones((5,5),np.float32)/25
+    dst = cv2.filter2D(img,-1,kernel)
+    return dst
+
 class Finder:
     norm_factor = 1
 
