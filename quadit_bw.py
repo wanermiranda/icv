@@ -263,13 +263,13 @@ class Finder:
                 print "ANGLE: " + str(best_angle)
 
                 target_img_name = os.path.basename(target_image_path)
-                save_image(rotate_diff.crop, 'angled/' + target_img_name)
-                output = open('angled/' + target_img_name + '.res', 'w+')
+                save_image(rotate_diff.crop, 'angled_bw/' + target_img_name)
+                output = open('angled_bw/' + target_img_name + '.res', 'w+')
                 output.write(str(rotate_diff))
                 output.flush()
                 output.close()
                 print "Query "
-                save_image(best_query, "angled/query" + target_img_name)
+                save_image(best_query, "angled_bw/query" + target_img_name)
 
 
 if __name__ == "__main__":
