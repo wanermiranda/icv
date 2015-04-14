@@ -79,6 +79,8 @@ class WindowSlider(threading.Thread):
         self.crop = None
         self.full = full
         self.slide_window = slide_window
+        self.query_bw = cv2.cvtColor(query_color, cv2.COLOR_BGR2GRAY)
+        self.target_bw = cv2.cvtColor(target_color, cv2.COLOR_BGR2GRAY)
 
     def run(self):
         y = self.column
@@ -89,9 +91,10 @@ class WindowSlider(threading.Thread):
             calc_y = y - self.slide_window.height
             calc_x = x - self.slide_window.width
             crop_color = self.target_color[calc_y: y, calc_x: x]
+            crop_bw = self.target_bw[calc_y: y, calc_x: x]
 
             hist_diff = get_mse(image_hist(crop_color), self.query_hist)
-            pixel_diff = get_mse(self.query_color, crop_color)
+            pixel_diff = get_mse(self.query_bw, crop_bw)
 
             diff = Difference(hist_diff, pixel_diff)
 
